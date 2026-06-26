@@ -19,11 +19,13 @@ import {
   altitudeValueFromMeters,
   capacityValueFromMah,
   speedValueFromMetersPerSecond,
+  toGramsFromWeightUnit,
   toMahFromCapacityUnit,
   toMetersPerSecondFromSpeedUnit,
   toMetersFromAltitudeUnit,
   UNIT_LABELS,
   UNIT_PRECISION,
+  weightInputValueFromGrams,
 } from '../../../shared/user-units.js';
 
 type EditorMode =
@@ -39,7 +41,6 @@ const FIELD_GROUPS: { title: string; fields: (keyof SitlCustomFrame)[] }[] = [
 ];
 
 const FIELD_HINTS: Partial<Record<keyof SitlCustomFrame, string>> = {
-  mass: 'kg',
   diagonal_size: 'm (motor-to-motor)',
   maxVoltage: 'V (full-charge)',
   refBatRes: 'Ω (internal)',
@@ -69,6 +70,7 @@ export function CustomFramePanel() {
   const altitudeUnit = unitPreferences.altitude;
   const electricCapacityUnit = unitPreferences.electricCapacity;
   const speedUnit = unitPreferences.speed;
+  const weightUnit = unitPreferences.weight;
 
   const [expanded, setExpanded] = useState(false);
   const [list, setList] = useState<SitlCustomFrameMeta[]>([]);
@@ -203,6 +205,7 @@ export function CustomFramePanel() {
   };
 
   const getFieldHint = (field: keyof SitlCustomFrame): string | undefined => {
+    if (field === 'mass') return UNIT_LABELS.weight[weightUnit];
     if (field === 'refAlt') return UNIT_LABELS.altitude[altitudeUnit];
     if (field === 'battCapacityAh') return UNIT_LABELS.electricCapacity[electricCapacityUnit];
     if (field === 'refSpd') return UNIT_LABELS.speed[speedUnit];
@@ -215,6 +218,9 @@ export function CustomFramePanel() {
     if (field === 'refAlt') {
       const precision = altitudeUnit === 'km' ? 3 : altitudeUnit === 'm' ? 0 : 1;
       return Number(altitudeValueFromMeters(value, altitudeUnit).toFixed(precision));
+    }
+    if (field === 'mass') {
+      return Number(weightInputValueFromGrams(value * 1000, weightUnit));
     }
     if (field === 'battCapacityAh') {
       return Number(capacityValueFromMah(value * 1000, electricCapacityUnit).toFixed(UNIT_PRECISION.electricCapacity[electricCapacityUnit]));
@@ -230,6 +236,10 @@ export function CustomFramePanel() {
     if (v === null) return;
     if (field === 'refAlt') {
       updateField(field, toMetersFromAltitudeUnit(v, altitudeUnit));
+      return;
+    }
+    if (field === 'mass') {
+      updateField(field, toGramsFromWeightUnit(v, weightUnit) / 1000);
       return;
     }
     if (field === 'battCapacityAh') {

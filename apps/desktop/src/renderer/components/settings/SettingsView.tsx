@@ -28,20 +28,24 @@ import {
   formatAltitudeFromMeters,
   formatCapacityFromMah,
   formatSpeedFromMetersPerSecond,
+  formatWeightFromGrams,
   speedValueFromMetersPerSecond,
+  toGramsFromWeightUnit,
   toMahFromCapacityUnit,
   toMetersPerSecondFromSpeedUnit,
   toMetersFromAltitudeUnit,
   UNIT_LABELS,
   UNIT_PRECISION,
+  weightInputValueFromGrams,
   type AltitudeUnit,
   type ElectricCapacityUnit,
   type SpeedUnit,
+  type WeightUnit,
 } from '../../../shared/user-units.js';
 
 // Display unit conversion helpers - storage is always mm/g/mAh
-function fmtWeight(g: number, units: DisplayUnits): string {
-  return units === 'large' ? `${+(g / 1000).toFixed(1)}kg` : `${g}g`;
+function fmtWeight(g: number, unit: WeightUnit): string {
+  return formatWeightFromGrams(g, unit);
 }
 function fmtLength(mm: number, units: DisplayUnits): string {
   return units === 'large' ? `${+(mm / 1000).toFixed(2)}m` : `${mm}mm`;
@@ -56,8 +60,7 @@ function unitLabel(smallUnit: string, units: DisplayUnits): string {
 
 // Fields that convert by ÷1000 when display units = 'large'
 const LARGE_UNIT_FIELDS: Record<string, number> = {
-  weight: 1000, wingspan: 1000, hullLength: 1000, wheelbase: 1000,
-  displacement: 1000,
+  wingspan: 1000, hullLength: 1000, wheelbase: 1000,
 };
 
 const MISSION_ALTITUDE_FIELDS = new Set([
@@ -1121,6 +1124,7 @@ export function SettingsView() {
   const altitudeUnitLabel = UNIT_LABELS.altitude[altitudeUnit];
   const electricCapacityUnit = unitPreferences.electricCapacity;
   const speedUnit = unitPreferences.speed;
+  const weightUnit = unitPreferences.weight;
 
   // Auto-detect vehicle type from MAVLink connection (only once per connection session)
   // Uses module-level variable to survive component remounts
@@ -1359,7 +1363,7 @@ export function SettingsView() {
                     {/* Weight */}
                     <div className="bg-black/20 rounded-lg p-2">
                       <div className="text-xs text-content-secondary">Weight</div>
-                      <div className="text-sm text-content font-medium">{fmtWeight(activeVehicle.weight, displayUnits)}</div>
+                      <div className="text-sm text-content font-medium">{fmtWeight(activeVehicle.weight, weightUnit)}</div>
                     </div>
                     {/* Battery */}
                     <div className="bg-black/20 rounded-lg p-2">
@@ -2719,6 +2723,121 @@ function AltitudeInputField({
   );
 }
 
+function weightInputStep(unit: WeightUnit): string {
+  return String(1 / (10 ** UNIT_PRECISION.weight[unit]));
+}
+
+function clampWeightGramsToRules(grams: number, rules: FieldValidation): number {
+  let next = grams;
+  if (rules.min !== undefined) next = Math.max(rules.min, next);
+  if (rules.max !== undefined) next = Math.min(rules.max, next);
+  return next;
+}
+
+function validateWeightField(value: string, rules: FieldValidation, unit: WeightUnit): string | null {
+  const trimmed = value.trim();
+  if (trimmed === '') {
+    return rules.required ? 'Required' : null;
+  }
+  const displayValue = Number(trimmed);
+  if (!Number.isFinite(displayValue)) return 'Must be a valid number';
+
+  const grams = toGramsFromWeightUnit(displayValue, unit);
+  if (rules.min !== undefined && grams < rules.min) {
+    return `Min: ${weightInputValueFromGrams(rules.min, unit)} ${UNIT_LABELS.weight[unit]}`;
+  }
+  if (rules.max !== undefined && grams > rules.max) {
+    return `Max: ${weightInputValueFromGrams(rules.max, unit)} ${UNIT_LABELS.weight[unit]}`;
+  }
+  if (unit === 'g' && rules.integer && !Number.isInteger(displayValue)) {
+    return 'Must be a whole number';
+  }
+  return null;
+}
+
+function WeightInputField({
+  label,
+  valueGrams,
+  onCommit,
+  unit,
+  placeholderGrams,
+  rules,
+}: {
+  label: string;
+  valueGrams: number | undefined;
+  onCommit: (grams: number | undefined) => void;
+  unit: WeightUnit;
+  placeholderGrams?: number;
+  rules: FieldValidation;
+}) {
+  const displayValue = weightInputValueFromGrams(valueGrams, unit);
+  const [draft, setDraft] = useState(displayValue);
+  const [focused, setFocused] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!focused) setDraft(displayValue);
+  }, [displayValue, focused]);
+
+  const resetDraft = useCallback(() => {
+    setDraft(weightInputValueFromGrams(valueGrams, unit));
+    setError(null);
+  }, [unit, valueGrams]);
+
+  return (
+    <div>
+      <label className="block text-xs text-content-secondary mb-1">{label}</label>
+      <div className="relative">
+        <input
+          type="number"
+          value={draft}
+          onFocus={() => setFocused(true)}
+          onChange={(e) => {
+            const next = e.target.value;
+            setDraft(next);
+            setError(validateWeightField(next, rules, unit));
+          }}
+          onBlur={() => {
+            setFocused(false);
+            const err = validateWeightField(draft, rules, unit);
+            if (draft.trim() === '' && !rules.required) {
+              if (valueGrams !== undefined) onCommit(undefined);
+              resetDraft();
+              return;
+            }
+            if (draft.trim() === '' || err) {
+              resetDraft();
+              return;
+            }
+            const displayNumber = Number(draft);
+            if (!Number.isFinite(displayNumber)) {
+              resetDraft();
+              return;
+            }
+            if (displayNumber === Number(displayValue)) {
+              resetDraft();
+              return;
+            }
+            const grams = Math.round(toGramsFromWeightUnit(displayNumber, unit));
+            onCommit(clampWeightGramsToRules(grams, rules));
+          }}
+          placeholder={placeholderGrams !== undefined ? weightInputValueFromGrams(placeholderGrams, unit) : undefined}
+          min={rules.min !== undefined ? weightInputValueFromGrams(rules.min, unit) : undefined}
+          max={rules.max !== undefined ? weightInputValueFromGrams(rules.max, unit) : undefined}
+          step={weightInputStep(unit)}
+          className={`w-full px-3 py-2 pr-12 bg-surface-input border rounded-lg text-content text-sm focus:outline-none ${
+            error ? 'border-red-500/60 focus:border-red-500' : 'border-border focus:border-blue-500'
+          }`}
+        />
+        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-content-secondary text-xs pointer-events-none">
+          {UNIT_LABELS.weight[unit]}
+        </span>
+      </div>
+      {error && <div className="text-[10px] text-red-400 mt-0.5">{error}</div>}
+    </div>
+  );
+}
+
 function capacityInputValueFromMah(mah: number | undefined, unit: ElectricCapacityUnit): string {
   const nativeValue = mah ?? 0;
   const decimals = UNIT_PRECISION.electricCapacity[unit];
@@ -3030,6 +3149,7 @@ function VehicleEditModal({
   const altitudeUnit = unitPreferences.altitude;
   const electricCapacityUnit = unitPreferences.electricCapacity;
   const speedUnit = unitPreferences.speed;
+  const weightUnit = unitPreferences.weight;
 
   // Conversion factor for current display units (1 = no conversion)
   const factor = (field: string) => large ? (LARGE_UNIT_FIELDS[field] ?? 1) : 1;
@@ -3155,14 +3275,13 @@ function VehicleEditModal({
                     { value: 8, label: 'Octocopter (8)' },
                   ]}
                 />
-                <VehicleInputField
+                <WeightInputField
                   label="All-Up Weight"
-                  value={getConvertedValue('weight')}
-                  onChange={(v) => handleConvertedChange('weight', v)}
-                  onBlur={() => handleBlur('weight')}
-                  error={getError('weight')}
-                  unit={getUnit('g')}
-                  placeholder={getPlaceholder('weight', '600')}
+                  valueGrams={vehicle.weight}
+                  onCommit={(grams) => { if (grams !== undefined) onUpdate({ weight: grams }); }}
+                  unit={weightUnit}
+                  placeholderGrams={600}
+                  rules={VEHICLE_FIELD_RULES.weight!}
                 />
                 <PropSizeInput
                   value={vehicle.propSize}
@@ -3197,14 +3316,13 @@ function VehicleEditModal({
                   unit={getUnit('mm')}
                   placeholder={getPlaceholder('wingspan', '1200')}
                 />
-                <VehicleInputField
+                <WeightInputField
                   label="All-Up Weight"
-                  value={getConvertedValue('weight')}
-                  onChange={(v) => handleConvertedChange('weight', v)}
-                  onBlur={() => handleBlur('weight')}
-                  error={getError('weight')}
-                  unit={getUnit('g')}
-                  placeholder={getPlaceholder('weight', '1500')}
+                  valueGrams={vehicle.weight}
+                  onCommit={(grams) => { if (grams !== undefined) onUpdate({ weight: grams }); }}
+                  unit={weightUnit}
+                  placeholderGrams={1500}
+                  rules={VEHICLE_FIELD_RULES.weight!}
                 />
                 <VehicleInputField
                   label="Wing Area"
@@ -3275,14 +3393,13 @@ function VehicleEditModal({
                     { value: 6, label: 'Hexaplane (6)' },
                   ]}
                 />
-                <VehicleInputField
+                <WeightInputField
                   label="All-Up Weight"
-                  value={getConvertedValue('weight')}
-                  onChange={(v) => handleConvertedChange('weight', v)}
-                  onBlur={() => handleBlur('weight')}
-                  error={getError('weight')}
-                  unit={getUnit('g')}
-                  placeholder={getPlaceholder('weight', '3000')}
+                  valueGrams={vehicle.weight}
+                  onCommit={(grams) => { if (grams !== undefined) onUpdate({ weight: grams }); }}
+                  unit={weightUnit}
+                  placeholderGrams={3000}
+                  rules={VEHICLE_FIELD_RULES.weight!}
                 />
                 <SpeedInputField
                   label="Transition Speed"
@@ -3325,14 +3442,13 @@ function VehicleEditModal({
                     { value: 'skid', label: 'Skid Steer' },
                   ]}
                 />
-                <VehicleInputField
+                <WeightInputField
                   label="Total Weight"
-                  value={getConvertedValue('weight')}
-                  onChange={(v) => handleConvertedChange('weight', v)}
-                  onBlur={() => handleBlur('weight')}
-                  error={getError('weight')}
-                  unit={getUnit('g')}
-                  placeholder={getPlaceholder('weight', '2000')}
+                  valueGrams={vehicle.weight}
+                  onCommit={(grams) => { if (grams !== undefined) onUpdate({ weight: grams }); }}
+                  unit={weightUnit}
+                  placeholderGrams={2000}
+                  rules={VEHICLE_FIELD_RULES.weight!}
                 />
                 <VehicleInputField
                   label="Wheelbase"
@@ -3404,23 +3520,21 @@ function VehicleEditModal({
                   unit={getUnit('mm')}
                   placeholder={getPlaceholder('hullLength', '600')}
                 />
-                <VehicleInputField
+                <WeightInputField
                   label="Total Weight"
-                  value={getConvertedValue('weight')}
-                  onChange={(v) => handleConvertedChange('weight', v)}
-                  onBlur={() => handleBlur('weight')}
-                  error={getError('weight')}
-                  unit={getUnit('g')}
-                  placeholder={getPlaceholder('weight', '3000')}
+                  valueGrams={vehicle.weight}
+                  onCommit={(grams) => { if (grams !== undefined) onUpdate({ weight: grams }); }}
+                  unit={weightUnit}
+                  placeholderGrams={3000}
+                  rules={VEHICLE_FIELD_RULES.weight!}
                 />
-                <VehicleInputField
+                <WeightInputField
                   label="Displacement"
-                  value={getConvertedValue('displacement')}
-                  onChange={(v) => handleConvertedChange('displacement', v)}
-                  onBlur={() => handleBlur('displacement')}
-                  error={getError('displacement')}
-                  unit={getUnit('g')}
-                  placeholder={getPlaceholder('displacement', '3500')}
+                  valueGrams={vehicle.displacement}
+                  onCommit={(grams) => onUpdate({ displacement: grams })}
+                  unit={weightUnit}
+                  placeholderGrams={3500}
+                  rules={VEHICLE_FIELD_RULES.displacement!}
                 />
                 <SpeedInputField
                   label="Max Speed"
@@ -3464,14 +3578,13 @@ function VehicleEditModal({
                     { value: 8, label: '8 Thrusters' },
                   ]}
                 />
-                <VehicleInputField
+                <WeightInputField
                   label="Dry Weight"
-                  value={getConvertedValue('weight')}
-                  onChange={(v) => handleConvertedChange('weight', v)}
-                  onBlur={() => handleBlur('weight')}
-                  error={getError('weight')}
-                  unit={getUnit('g')}
-                  placeholder={getPlaceholder('weight', '5000')}
+                  valueGrams={vehicle.weight}
+                  onCommit={(grams) => { if (grams !== undefined) onUpdate({ weight: grams }); }}
+                  unit={weightUnit}
+                  placeholderGrams={5000}
+                  rules={VEHICLE_FIELD_RULES.weight!}
                 />
                 <AltitudeInputField
                   label="Max Depth Rating"
@@ -3722,6 +3835,7 @@ function VehicleCard({
   const { displayUnits, unitPreferences } = useSettingsStore();
   const altitudeUnit = unitPreferences.altitude;
   const electricCapacityUnit = unitPreferences.electricCapacity;
+  const weightUnit = unitPreferences.weight;
   // Build vehicle-specific info string
   const getVehicleSpecs = () => {
     const parts: string[] = [];
@@ -3738,12 +3852,12 @@ function VehicleCard({
           parts.push(motorNames[vehicle.motorCount] || `${vehicle.motorCount}M`);
         }
         parts.push(batteryStr);
-        parts.push(fmtWeight(vehicle.weight, displayUnits));
+        parts.push(fmtWeight(vehicle.weight, weightUnit));
         break;
       case 'plane':
         if (vehicle.wingspan) parts.push(`${fmtLength(vehicle.wingspan, displayUnits)} span`);
         parts.push(batteryStr);
-        parts.push(fmtWeight(vehicle.weight, displayUnits));
+        parts.push(fmtWeight(vehicle.weight, weightUnit));
         break;
       case 'vtol':
         if (vehicle.wingspan) parts.push(fmtLength(vehicle.wingspan, displayUnits));
@@ -3772,7 +3886,7 @@ function VehicleCard({
         break;
       default:
         parts.push(batteryStr);
-        parts.push(fmtWeight(vehicle.weight, displayUnits));
+        parts.push(fmtWeight(vehicle.weight, weightUnit));
     }
 
     return parts.join(' • ');

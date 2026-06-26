@@ -2,7 +2,7 @@ import { Calculator } from 'lucide-react';
 import type { VehicleProfile } from '../../../stores/settings-store.js';
 import { useSettingsStore } from '../../../stores/settings-store.js';
 import { Tooltip } from '../../ui/Tooltip.js';
-import { formatSpeedFromMetersPerSecond } from '../../../../shared/user-units.js';
+import { formatSpeedFromMetersPerSecond, formatWeightFromGrams } from '../../../../shared/user-units.js';
 
 interface StallSpeedCalcButtonProps {
   vehicle: VehicleProfile;
@@ -41,8 +41,8 @@ export function StallSpeedCalcButton({ vehicle, onCompute }: StallSpeedCalcButto
 
 function StallExplanation({ vehicle, estimate }: { vehicle: VehicleProfile; estimate: number }) {
   const speedUnit = useSettingsStore((s) => s.unitPreferences.speed);
+  const weightUnit = useSettingsStore((s) => s.unitPreferences.weight);
   const clMax = getClMax(vehicle);
-  const weight_kg = (vehicle.weight ?? 0) / 1000;
   const wingArea_m2 = (vehicle.wingArea ?? 0) / 10000;
 
   return (
@@ -60,7 +60,7 @@ function StallExplanation({ vehicle, estimate }: { vehicle: VehicleProfile; esti
       </div>
 
       <div className="text-[11px] space-y-0.5">
-        <Row label="AUW (m)"       value={`${weight_kg.toFixed(2)} kg`} />
+        <Row label="AUW"           value={formatWeightFromGrams(vehicle.weight ?? 0, weightUnit)} />
         <Row label="Wing area (S)" value={`${wingArea_m2.toFixed(3)} m²`} />
         <Row label="Air density"   value="1.225 kg/m³" />
         <Row label="C Lmax"        value={`${clMax} (${wingShapeLabel(vehicle)})`} />

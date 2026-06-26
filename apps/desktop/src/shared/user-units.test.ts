@@ -37,6 +37,7 @@ import {
   toSquareMetersFromAreaUnit,
   verticalSpeedValueFromMetersPerSecond,
   weightValueFromGrams,
+  weightInputValueFromGrams,
   windSpeedValueFromMetersPerSecond,
 } from './user-units';
 
@@ -222,6 +223,14 @@ describe('weight, dimension, area, and wind helpers', () => {
     expect(toMetersPerSecondFromWindSpeedUnit(windSpeedValueFromMetersPerSecond(9, 'kph'), 'kph')).toBeCloseTo(9);
     expect(toMetersPerSecondFromWindSpeedUnit(windSpeedValueFromMetersPerSecond(9, 'mph'), 'mph')).toBeCloseTo(9);
     expect(toMetersPerSecondFromWindSpeedUnit(windSpeedValueFromMetersPerSecond(9, 'kt'), 'kt')).toBeCloseTo(9);
+  });
+
+  it('formats weight input values without unit text while preserving selected-unit precision', () => {
+    expect(weightInputValueFromGrams(undefined, 'kg')).toBe('');
+    expect(weightInputValueFromGrams(1500, 'g')).toBe('1500');
+    expect(weightInputValueFromGrams(1500, 'kg')).toBe('1.5');
+    expect(weightInputValueFromGrams(28.349523125, 'oz')).toBe('1');
+    expect(weightInputValueFromGrams(453.59237, 'lb')).toBe('1');
   });
 });
 

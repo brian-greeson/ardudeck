@@ -429,6 +429,11 @@ export function formatWeightFromGrams(grams: number, unit: WeightUnit): string {
   return `${formatValue(weightValueFromGrams(grams, unit), UNIT_PRECISION.weight[unit])} ${UNIT_LABELS.weight[unit]}`;
 }
 
+export function weightInputValueFromGrams(grams: number | undefined, unit: WeightUnit): string {
+  if (grams === undefined || !Number.isFinite(grams)) return '';
+  return String(Number(weightValueFromGrams(grams, unit).toFixed(UNIT_PRECISION.weight[unit])));
+}
+
 export function dimensionValueFromMillimeters(millimeters: number, unit: DimensionUnit): number {
   switch (unit) {
     case 'mm':
