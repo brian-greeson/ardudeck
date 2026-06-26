@@ -38,8 +38,11 @@ import type { PersistedSurveyPreset } from '../../../shared/ipc-channels';
 import {
   altitudeValueFromMeters,
   formatAltitudeFromMeters,
+  speedValueFromMetersPerSecond,
+  toMetersPerSecondFromSpeedUnit,
   toMetersFromAltitudeUnit,
   UNIT_LABELS,
+  UNIT_PRECISION,
 } from '../../../shared/user-units.js';
 
 // Pattern catalog. Each entry advertises which modes it applies to so the UI
@@ -583,7 +586,7 @@ export function SurveyConfigPanel() {
                 </div>
               </>
             )}
-            <SliderInput label="Speed" value={config.speed} onChange={setSpeed} min={1} max={30} step={0.5} unit="m/s" />
+            <SpeedSliderInput label="Speed" valueMps={config.speed} onChangeMps={setSpeed} minMps={1} maxMps={30} />
             <SliderInput
               label="Endurance"
               value={config.enduranceMinutes ?? 20}
@@ -1163,6 +1166,79 @@ function AltitudeSliderInput({
           className="w-10 px-1 py-0.5 text-xs text-right tabular-nums font-medium bg-surface-input border border-subtle rounded text-content focus:outline-none focus:border-purple-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
         />
         <span className="text-[10px] text-content-tertiary w-3">{unit}</span>
+      </div>
+    </div>
+  );
+}
+
+function SpeedSliderInput({
+  label,
+  valueMps,
+  onChangeMps,
+  minMps,
+  maxMps,
+}: {
+  label: string;
+  valueMps: number;
+  onChangeMps: (v: number) => void;
+  minMps: number;
+  maxMps: number;
+}) {
+  const speedUnit = useSettingsStore((s) => s.unitPreferences.speed);
+  const precision = UNIT_PRECISION.speed[speedUnit];
+  const min = Number(speedValueFromMetersPerSecond(minMps, speedUnit).toFixed(precision));
+  const max = Number(speedValueFromMetersPerSecond(maxMps, speedUnit).toFixed(precision));
+  const step = 1 / (10 ** precision);
+  const value = speedValueFromMetersPerSecond(valueMps, speedUnit);
+  const roundedDisplayValue = Number(value.toFixed(precision));
+  const unit = UNIT_LABELS.speed[speedUnit];
+
+  const commitDisplay = (displayValue: number) => {
+    if (!Number.isFinite(displayValue) || displayValue < min || displayValue > max) return;
+    onChangeMps(toMetersPerSecondFromSpeedUnit(displayValue, speedUnit));
+  };
+
+  const clampBlur = (e: React.FocusEvent<HTMLInputElement>) => {
+    const rawValue = e.target.value;
+    if (rawValue.trim() === '') return;
+    const displayValue = Number(rawValue);
+    if (!Number.isFinite(displayValue)) return;
+    if (displayValue === roundedDisplayValue) return;
+    const clamped = Math.min(max, Math.max(min, displayValue));
+    const mps = toMetersPerSecondFromSpeedUnit(clamped, speedUnit);
+    if (mps !== valueMps) onChangeMps(mps);
+  };
+
+  return (
+    <div className="flex items-center gap-2">
+      <span className="text-xs text-content-secondary w-14 flex-shrink-0">{label}</span>
+      <input
+        type="range"
+        value={roundedDisplayValue}
+        onChange={(e) => commitDisplay(Number(e.target.value))}
+        min={min}
+        max={max}
+        step={step}
+        className="flex-1 h-1 bg-surface-inset rounded-full appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-purple-400 [&::-webkit-slider-thumb]:cursor-grab"
+      />
+      <div className="flex items-center gap-0.5 w-16 flex-shrink-0 justify-end">
+        <input
+          type="number"
+          value={roundedDisplayValue}
+          onChange={(e) => {
+            const rawValue = e.target.value;
+            if (rawValue.trim() === '') return;
+            const displayValue = Number(rawValue);
+            commitDisplay(displayValue);
+          }}
+          onBlur={clampBlur}
+          min={min}
+          max={max}
+          step={step}
+          aria-label={label}
+          className="w-10 px-1 py-0.5 text-xs text-right tabular-nums font-medium bg-surface-input border border-subtle rounded text-content focus:outline-none focus:border-purple-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+        />
+        <span className="text-[10px] text-content-tertiary w-5">{unit}</span>
       </div>
     </div>
   );

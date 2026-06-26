@@ -4,7 +4,7 @@ import { useSettingsStore } from '../../stores/settings-store';
 import { HealthCheckCard } from './HealthCheckCard';
 import { AiWarningDialog } from './AiAnalysisPanel';
 import type { ExplorerPreset, HealthCheckResult } from '@ardudeck/dataflash-parser';
-import { formatAltitudeFromMeters, formatCapacityFromMah } from '../../../shared/user-units.js';
+import { formatAltitudeFromMeters, formatCapacityFromMah, formatSpeedFromMetersPerSecond } from '../../../shared/user-units.js';
 
 function computeFlightStats(log: ReturnType<typeof useLogStore.getState>['currentLog']) {
   if (!log) return null;
@@ -54,6 +54,7 @@ export function HealthReportPanel() {
   const aiWarningDismissed = useSettingsStore((s) => s.aiWarningDismissed);
   const altitudeUnit = useSettingsStore((s) => s.unitPreferences.altitude);
   const electricCapacityUnit = useSettingsStore((s) => s.unitPreferences.electricCapacity);
+  const speedUnit = useSettingsStore((s) => s.unitPreferences.speed);
   const aiInsightCards = useLogStore((s) => s.aiInsightCards);
   const isAiInsightLoading = useLogStore((s) => s.isAiInsightLoading);
   const aiInsightError = useLogStore((s) => s.aiInsightError);
@@ -85,7 +86,7 @@ export function HealthReportPanel() {
 ## This Flight
 - Vehicle: ${meta.vehicleType || 'Unknown'} running ${meta.firmwareString || meta.firmwareVersion || 'Unknown firmware'}
 - Duration: ${(dS / 60).toFixed(1)} minutes
-- Max Altitude: ${formatAltitudeFromMeters(stats.maxAlt, altitudeUnit)} | Max Speed: ${stats.maxSpd.toFixed(1)} m/s
+- Max Altitude: ${formatAltitudeFromMeters(stats.maxAlt, altitudeUnit)} | Max Speed: ${formatSpeedFromMetersPerSecond(stats.maxSpd, speedUnit)}
 - Distance: ${dist} | Battery Used: ${formatCapacityFromMah(stats.totalMah, electricCapacityUnit)}
 
 ## Automated Health Check Results
@@ -127,7 +128,7 @@ Return 3-6 cards. Most important issues first.`;
     } else {
       store.setAiInsightError(result?.error ?? 'AI analysis failed');
     }
-  }, [aiProvider, altitudeUnit, currentLog, electricCapacityUnit, healthResults]);
+  }, [aiProvider, altitudeUnit, currentLog, electricCapacityUnit, healthResults, speedUnit]);
 
   if (!healthResults || !currentLog) {
     return (
@@ -216,7 +217,7 @@ Return 3-6 cards. Most important issues first.`;
             </div>
             <div>
               <div className="text-xs text-content-secondary">Max Speed</div>
-              <div className="text-sm text-content font-medium">{flightStats.maxSpd.toFixed(1)} m/s</div>
+              <div className="text-sm text-content font-medium">{formatSpeedFromMetersPerSecond(flightStats.maxSpd, speedUnit)}</div>
             </div>
             <div>
               <div className="text-xs text-content-secondary">Distance</div>

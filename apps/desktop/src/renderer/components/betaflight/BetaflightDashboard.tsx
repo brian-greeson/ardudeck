@@ -10,7 +10,7 @@ import { useMspTelemetryStore, setupMspTelemetryListeners } from '../../stores/m
 import { PRIMARY_CHANNEL_COUNT, getChannelName, reorderChannels } from '../../utils/rc-channel-constants';
 import { useReceiverStore } from '../../stores/receiver-store';
 import { useSettingsStore } from '../../stores/settings-store';
-import { formatAltitudeFromMeters, formatCapacityFromMah } from '../../../shared/user-units.js';
+import { formatAltitudeFromMeters, formatCapacityFromMah, formatVerticalSpeedFromMetersPerSecond } from '../../../shared/user-units.js';
 
 interface SerialPortInfo {
   path: string;
@@ -41,6 +41,7 @@ export function BetaflightDashboard() {
   const lastUpdate = useMspTelemetryStore((s) => s.lastUpdate);
   const altitudeUnit = useSettingsStore((s) => s.unitPreferences.altitude);
   const electricCapacityUnit = useSettingsStore((s) => s.unitPreferences.electricCapacity);
+  const verticalSpeedUnit = useSettingsStore((s) => s.unitPreferences.verticalSpeed);
 
   // Setup IPC listeners on mount
   useEffect(() => {
@@ -356,7 +357,7 @@ export function BetaflightDashboard() {
                 </div>
                 <div className="flex justify-between">
                   <span className="text-content-secondary">Vario</span>
-                  <span className="text-content font-mono">{altitude.vario.toFixed(1)}m/s</span>
+                  <span className="text-content font-mono">{formatVerticalSpeedFromMetersPerSecond(altitude.vario, verticalSpeedUnit)}</span>
                 </div>
               </div>
             </div>

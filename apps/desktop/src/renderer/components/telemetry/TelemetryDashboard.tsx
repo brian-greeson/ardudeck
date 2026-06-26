@@ -19,7 +19,7 @@ import { useEditModeStore } from '../../stores/edit-mode-store';
 import { useTelemetryLayoutStore } from '../../stores/telemetry-layout-store';
 import { useResolvedTheme } from '../../hooks/useTheme';
 import type { TelemetrySpeed } from '../../../shared/ipc-channels';
-import { formatAltitudeFromMeters } from '../../../shared/user-units.js';
+import { formatAltitudeFromMeters, formatSpeedFromMetersPerSecond } from '../../../shared/user-units.js';
 
 // Reserved layout name for auto-save (separate from user-named layouts)
 const TELEMETRY_AUTOSAVE_NAME = '__telemetry_autosave';
@@ -697,6 +697,7 @@ function QuickStatsBar() {
   const telemetrySpeed = useSettingsStore((s) => s.telemetrySpeed);
   const setTelemetrySpeed = useSettingsStore((s) => s.setTelemetrySpeed);
   const altitudeUnit = useSettingsStore((s) => s.unitPreferences.altitude);
+  const speedUnit = useSettingsStore((s) => s.unitPreferences.speed);
   const batteryColor = battery.remaining < 0 ? 'text-content-secondary' : battery.remaining > 30 ? 'text-emerald-400' : battery.remaining > 15 ? 'text-yellow-400' : 'text-red-400';
   const isMavlink = connectionState.protocol === 'mavlink';
 
@@ -747,7 +748,7 @@ function QuickStatsBar() {
         </div>
         <div className="flex items-baseline gap-1.5">
           <span className="text-content-secondary">SPD</span>
-          <span className="font-mono text-sm text-content">{vfrHud.groundspeed.toFixed(1)}m/s</span>
+          <span className="font-mono text-sm text-content">{formatSpeedFromMetersPerSecond(vfrHud.groundspeed, speedUnit)}</span>
         </div>
         <div className="flex items-baseline gap-1.5">
           <span className="text-content-secondary">THR</span>

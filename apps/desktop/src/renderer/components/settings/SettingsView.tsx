@@ -27,12 +27,16 @@ import {
   capacityValueFromMah,
   formatAltitudeFromMeters,
   formatCapacityFromMah,
+  formatSpeedFromMetersPerSecond,
+  speedValueFromMetersPerSecond,
   toMahFromCapacityUnit,
+  toMetersPerSecondFromSpeedUnit,
   toMetersFromAltitudeUnit,
   UNIT_LABELS,
   UNIT_PRECISION,
   type AltitudeUnit,
   type ElectricCapacityUnit,
+  type SpeedUnit,
 } from '../../../shared/user-units.js';
 
 // Display unit conversion helpers - storage is always mm/g/mAh
@@ -87,6 +91,40 @@ function clampAltitudeMetersToRules(meters: number, rules: FieldValidation): num
   if (rules.min !== undefined) next = Math.max(rules.min, next);
   if (rules.max !== undefined) next = Math.min(rules.max, next);
   return next;
+}
+
+function speedInputValueFromMetersPerSecond(mps: number | undefined, unit: SpeedUnit): string {
+  if (mps === undefined || !Number.isFinite(mps)) return '';
+  return String(Number(speedValueFromMetersPerSecond(mps, unit).toFixed(UNIT_PRECISION.speed[unit])));
+}
+
+function speedInputStep(unit: SpeedUnit): string {
+  return String(1 / (10 ** UNIT_PRECISION.speed[unit]));
+}
+
+function clampSpeedMetersPerSecondToRules(mps: number, rules: FieldValidation): number {
+  let next = mps;
+  if (rules.min !== undefined) next = Math.max(rules.min, next);
+  if (rules.max !== undefined) next = Math.min(rules.max, next);
+  return next;
+}
+
+function validateSpeedField(value: string, rules: FieldValidation, unit: SpeedUnit): string | null {
+  const trimmed = value.trim();
+  if (trimmed === '') {
+    return rules.required ? 'Required' : null;
+  }
+  const displayValue = Number(trimmed);
+  if (!Number.isFinite(displayValue)) return 'Invalid number';
+
+  const metersPerSecond = toMetersPerSecondFromSpeedUnit(displayValue, unit);
+  if (rules.min !== undefined && metersPerSecond < rules.min) {
+    return `Min: ${speedInputValueFromMetersPerSecond(rules.min, unit)} ${UNIT_LABELS.speed[unit]}`;
+  }
+  if (rules.max !== undefined && metersPerSecond > rules.max) {
+    return `Max: ${speedInputValueFromMetersPerSecond(rules.max, unit)} ${UNIT_LABELS.speed[unit]}`;
+  }
+  return null;
 }
 
 // Vehicle types supported by each firmware
@@ -1082,6 +1120,7 @@ export function SettingsView() {
   const altitudeUnit = unitPreferences.altitude;
   const altitudeUnitLabel = UNIT_LABELS.altitude[altitudeUnit];
   const electricCapacityUnit = unitPreferences.electricCapacity;
+  const speedUnit = unitPreferences.speed;
 
   // Auto-detect vehicle type from MAVLink connection (only once per connection session)
   // Uses module-level variable to survive component remounts
@@ -1333,9 +1372,7 @@ export function SettingsView() {
                         {['copter', 'plane', 'vtol'].includes(activeVehicle.type) ? 'Est. Cruise' : 'Est. Speed'}
                       </div>
                       <div className="text-sm text-cyan-400 font-medium">
-                        {activeVehicle.type === 'boat'
-                          ? `${(cruiseSpeed * 1.944).toFixed(1)} kts`
-                          : `${cruiseSpeed.toFixed(1)} m/s`}
+                        {formatSpeedFromMetersPerSecond(cruiseSpeed, speedUnit)}
                       </div>
                     </div>
                   </div>
@@ -2790,6 +2827,92 @@ function CapacityInputField({
   );
 }
 
+function SpeedInputField({
+  label,
+  valueMps,
+  onCommit,
+  unit,
+  placeholderMps,
+  rules,
+}: {
+  label?: string;
+  valueMps: number | undefined;
+  onCommit: (mps: number | undefined) => void;
+  unit: SpeedUnit;
+  placeholderMps?: number;
+  rules: FieldValidation;
+}) {
+  const displayValue = speedInputValueFromMetersPerSecond(valueMps, unit);
+  const [draft, setDraft] = useState(displayValue);
+  const [focused, setFocused] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!focused) setDraft(displayValue);
+  }, [displayValue, focused]);
+
+  const resetDraft = useCallback(() => {
+    setDraft(speedInputValueFromMetersPerSecond(valueMps, unit));
+    setError(null);
+  }, [unit, valueMps]);
+
+  return (
+    <div>
+      {label && <label className="block text-xs text-content-secondary mb-1">{label}</label>}
+      <div className="relative">
+        <input
+          type="number"
+          value={draft}
+          onFocus={() => setFocused(true)}
+          onChange={(e) => {
+            const next = e.target.value;
+            setDraft(next);
+            setError(validateSpeedField(next, rules, unit));
+          }}
+          onBlur={() => {
+            setFocused(false);
+            if (draft.trim() === '') {
+              if (rules.required) {
+                resetDraft();
+                return;
+              }
+              if (valueMps !== undefined) onCommit(undefined);
+              resetDraft();
+              return;
+            }
+            const err = validateSpeedField(draft, rules, unit);
+            if (err) {
+              resetDraft();
+              return;
+            }
+            const displayNumber = Number(draft);
+            if (!Number.isFinite(displayNumber)) {
+              resetDraft();
+              return;
+            }
+            if (displayNumber === Number(displayValue)) {
+              resetDraft();
+              return;
+            }
+            onCommit(clampSpeedMetersPerSecondToRules(toMetersPerSecondFromSpeedUnit(displayNumber, unit), rules));
+          }}
+          placeholder={placeholderMps !== undefined ? speedInputValueFromMetersPerSecond(placeholderMps, unit) : undefined}
+          min={rules.min !== undefined ? speedInputValueFromMetersPerSecond(rules.min, unit) : undefined}
+          max={rules.max !== undefined ? speedInputValueFromMetersPerSecond(rules.max, unit) : undefined}
+          step={speedInputStep(unit)}
+          className={`w-full px-3 py-2 pr-12 bg-surface-input border rounded-lg text-content text-sm focus:outline-none ${
+            error ? 'border-red-500/60 focus:border-red-500' : 'border-border focus:border-blue-500'
+          }`}
+        />
+        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-content-secondary text-xs pointer-events-none">
+          {UNIT_LABELS.speed[unit]}
+        </span>
+      </div>
+      {error && <div className="text-[10px] text-red-400 mt-0.5">{error}</div>}
+    </div>
+  );
+}
+
 // Select field component for vehicle forms
 function VehicleSelectField({
   label,
@@ -2906,6 +3029,7 @@ function VehicleEditModal({
   const large = displayUnits === 'large';
   const altitudeUnit = unitPreferences.altitude;
   const electricCapacityUnit = unitPreferences.electricCapacity;
+  const speedUnit = unitPreferences.speed;
 
   // Conversion factor for current display units (1 = no conversion)
   const factor = (field: string) => large ? (LARGE_UNIT_FIELDS[field] ?? 1) : 1;
@@ -3099,24 +3223,14 @@ function VehicleEditModal({
                       onCompute={(mps) => onUpdate({ stallSpeed: mps })}
                     />
                   </div>
-                  <div className="relative">
-                    <input
-                      type="number"
-                      value={getDisplayValue('stallSpeed') ?? ''}
-                      onChange={(e) => handleChange('stallSpeed', e.target.value)}
-                      onBlur={() => handleBlur('stallSpeed')}
-                      placeholder="8"
-                      className={`w-full px-3 py-2 pr-12 bg-surface-input border rounded-lg text-content text-sm focus:outline-none ${
-                        getError('stallSpeed')
-                          ? 'border-red-500/60 focus:border-red-500'
-                          : 'border-border focus:border-blue-500'
-                      }`}
-                    />
-                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-content-secondary text-xs pointer-events-none">m/s</span>
-                  </div>
-                  {getError('stallSpeed') && (
-                    <div className="text-[10px] text-red-400 mt-0.5">{getError('stallSpeed')}</div>
-                  )}
+                  <SpeedInputField
+                    label=""
+                    valueMps={vehicle.stallSpeed}
+                    onCommit={(mps) => onUpdate({ stallSpeed: mps })}
+                    unit={speedUnit}
+                    placeholderMps={8}
+                    rules={VEHICLE_FIELD_RULES.stallSpeed!}
+                  />
                 </div>
                 <PropSizeInput
                   value={vehicle.propSize}
@@ -3170,14 +3284,13 @@ function VehicleEditModal({
                   unit={getUnit('g')}
                   placeholder={getPlaceholder('weight', '3000')}
                 />
-                <VehicleInputField
+                <SpeedInputField
                   label="Transition Speed"
-                  value={getDisplayValue('transitionSpeed')}
-                  onChange={(v) => handleChange('transitionSpeed', v)}
-                  onBlur={() => handleBlur('transitionSpeed')}
-                  error={getError('transitionSpeed')}
-                  unit="m/s"
-                  placeholder="15"
+                  valueMps={vehicle.transitionSpeed}
+                  onCommit={(mps) => onUpdate({ transitionSpeed: mps })}
+                  unit={speedUnit}
+                  placeholderMps={15}
+                  rules={VEHICLE_FIELD_RULES.transitionSpeed!}
                 />
                 <PropSizeInput
                   value={vehicle.propSize}
@@ -3239,14 +3352,13 @@ function VehicleEditModal({
                   unit="mm"
                   placeholder="100"
                 />
-                <VehicleInputField
+                <SpeedInputField
                   label="Max Speed"
-                  value={getDisplayValue('maxSpeed')}
-                  onChange={(v) => handleChange('maxSpeed', v)}
-                  onBlur={() => handleBlur('maxSpeed')}
-                  error={getError('maxSpeed')}
-                  unit="m/s"
-                  placeholder="5"
+                  valueMps={vehicle.maxSpeed}
+                  onCommit={(mps) => onUpdate({ maxSpeed: mps })}
+                  unit={speedUnit}
+                  placeholderMps={5}
+                  rules={VEHICLE_FIELD_RULES.maxSpeed!}
                 />
               </div>
             </div>
@@ -3310,14 +3422,13 @@ function VehicleEditModal({
                   unit={getUnit('g')}
                   placeholder={getPlaceholder('displacement', '3500')}
                 />
-                <VehicleInputField
+                <SpeedInputField
                   label="Max Speed"
-                  value={getDisplayValue('maxSpeed')}
-                  onChange={(v) => handleChange('maxSpeed', v)}
-                  onBlur={() => handleBlur('maxSpeed')}
-                  error={getError('maxSpeed')}
-                  unit="m/s"
-                  placeholder="3"
+                  valueMps={vehicle.maxSpeed}
+                  onCommit={(mps) => onUpdate({ maxSpeed: mps })}
+                  unit={speedUnit}
+                  placeholderMps={3}
+                  rules={VEHICLE_FIELD_RULES.maxSpeed!}
                 />
               </div>
             </div>
@@ -3380,14 +3491,13 @@ function VehicleEditModal({
                     { value: 'negative', label: 'Negative (sinks)' },
                   ]}
                 />
-                <VehicleInputField
+                <SpeedInputField
                   label="Max Speed"
-                  value={getDisplayValue('maxSpeed')}
-                  onChange={(v) => handleChange('maxSpeed', v)}
-                  onBlur={() => handleBlur('maxSpeed')}
-                  error={getError('maxSpeed')}
-                  unit="m/s"
-                  placeholder="2"
+                  valueMps={vehicle.maxSpeed}
+                  onCommit={(mps) => onUpdate({ maxSpeed: mps })}
+                  unit={speedUnit}
+                  placeholderMps={2}
+                  rules={VEHICLE_FIELD_RULES.maxSpeed!}
                 />
               </div>
             </div>

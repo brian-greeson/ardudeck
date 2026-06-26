@@ -21,7 +21,7 @@ import { useImperativeMapLayer } from '../map/ImperativeMapLayer';
 import { MapCommandPopup } from '../map/MapCommandPopup';
 import { createPortal } from 'react-dom';
 import { computeOffsetPosition } from '../../utils/geo-offset';
-import { formatAltitudeFromMeters, formatDistanceFromMeters, type DistanceUnit } from '../../../shared/user-units.js';
+import { formatAltitudeFromMeters, formatDistanceFromMeters, formatSpeedFromMetersPerSecond, type DistanceUnit } from '../../../shared/user-units.js';
 
 // Geofence and Rally overlays (read-only in telemetry view)
 import { FenceMapOverlay } from '../geofence/FenceMapOverlay';
@@ -985,6 +985,7 @@ const TelemetryMap3D = React.memo(function TelemetryMap3D() {
   const attitude = useTelemetryStore((s) => s.attitude);
   const distanceUnit = useSettingsStore((s) => s.unitPreferences.distance);
   const altitudeUnit = useSettingsStore((s) => s.unitPreferences.altitude);
+  const speedUnit = useSettingsStore((s) => s.unitPreferences.speed);
 
   const [followVehicle, setFollowVehicle] = useState(true);
   const [showCompass, setShowCompass] = useState(true);
@@ -1390,7 +1391,7 @@ const TelemetryMap3D = React.memo(function TelemetryMap3D() {
         </div>
         <div className="flex justify-between">
           <span className="text-content-secondary">Spd</span>
-          <span className="font-mono text-content">{vfrHud.groundspeed.toFixed(1)}<span className="text-content-secondary ml-0.5">m/s</span></span>
+          <span className="font-mono text-content">{formatSpeedFromMetersPerSecond(vfrHud.groundspeed, speedUnit)}</span>
         </div>
         <div className="flex justify-between">
           <span className="text-content-secondary">Hdg</span>
@@ -1660,6 +1661,7 @@ const TelemetryMap2D = React.memo(function TelemetryMap2D() {
   const wind = useTelemetryStore((s) => s.wind);
   const distanceUnit = useSettingsStore((s) => s.unitPreferences.distance);
   const altitudeUnit = useSettingsStore((s) => s.unitPreferences.altitude);
+  const speedUnit = useSettingsStore((s) => s.unitPreferences.speed);
   const connectionState = useConnectionStore((s) => s.connectionState);
   const [followVehicle, setFollowVehicle] = useState(true);
   const [trail, setTrail] = useState<[number, number][]>([]);
@@ -1765,6 +1767,7 @@ const TelemetryMap2D = React.memo(function TelemetryMap2D() {
     updateTacticalIconDOM(el, {
       heading: vfrHud.heading,
       groundspeed: vfrHud.groundspeed,
+      speedText: formatSpeedFromMetersPerSecond(vfrHud.groundspeed, speedUnit),
       altitudeAgl: position.relativeAlt,
       altitudeText: formatAltitudeFromMeters(position.relativeAlt, altitudeUnit),
       windDirection: wind.direction,
@@ -1773,7 +1776,7 @@ const TelemetryMap2D = React.memo(function TelemetryMap2D() {
     // tacticalIcon is in deps so that whenever the icon DOM is regenerated
     // (e.g. selection change rebuilds it with reset rotation), we reapply
     // the current heading immediately - prevents a brief flip-to-north flicker.
-  }, [vfrHud.heading, vfrHud.groundspeed, position.relativeAlt, altitudeUnit, wind.direction, wind.speed, tacticalClass, tacticalIcon]);
+  }, [vfrHud.heading, vfrHud.groundspeed, position.relativeAlt, altitudeUnit, speedUnit, wind.direction, wind.speed, tacticalClass, tacticalIcon]);
 
   // Calculate distance and bearing to home
   const homeStats = useMemo(() => {
@@ -2147,7 +2150,7 @@ const TelemetryMap2D = React.memo(function TelemetryMap2D() {
         </div>
         <div className="flex justify-between">
           <span className="text-content-secondary">Spd</span>
-          <span className="font-mono text-content">{vfrHud.groundspeed.toFixed(1)}<span className="text-content-secondary ml-0.5">m/s</span></span>
+          <span className="font-mono text-content">{formatSpeedFromMetersPerSecond(vfrHud.groundspeed, speedUnit)}</span>
         </div>
         <div className="flex justify-between">
           <span className="text-content-secondary">Hdg</span>

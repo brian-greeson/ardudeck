@@ -18,7 +18,9 @@ import { useSettingsStore } from '../../stores/settings-store';
 import {
   altitudeValueFromMeters,
   capacityValueFromMah,
+  speedValueFromMetersPerSecond,
   toMahFromCapacityUnit,
+  toMetersPerSecondFromSpeedUnit,
   toMetersFromAltitudeUnit,
   UNIT_LABELS,
   UNIT_PRECISION,
@@ -41,7 +43,6 @@ const FIELD_HINTS: Partial<Record<keyof SitlCustomFrame, string>> = {
   diagonal_size: 'm (motor-to-motor)',
   maxVoltage: 'V (full-charge)',
   refBatRes: 'Ω (internal)',
-  refSpd: 'm/s',
   refAngle: 'deg',
   refVoltage: 'V',
   refCurrent: 'A',
@@ -67,6 +68,7 @@ export function CustomFramePanel() {
   const unitPreferences = useSettingsStore((s) => s.unitPreferences);
   const altitudeUnit = unitPreferences.altitude;
   const electricCapacityUnit = unitPreferences.electricCapacity;
+  const speedUnit = unitPreferences.speed;
 
   const [expanded, setExpanded] = useState(false);
   const [list, setList] = useState<SitlCustomFrameMeta[]>([]);
@@ -203,6 +205,7 @@ export function CustomFramePanel() {
   const getFieldHint = (field: keyof SitlCustomFrame): string | undefined => {
     if (field === 'refAlt') return UNIT_LABELS.altitude[altitudeUnit];
     if (field === 'battCapacityAh') return UNIT_LABELS.electricCapacity[electricCapacityUnit];
+    if (field === 'refSpd') return UNIT_LABELS.speed[speedUnit];
     return FIELD_HINTS[field];
   };
 
@@ -216,6 +219,9 @@ export function CustomFramePanel() {
     if (field === 'battCapacityAh') {
       return Number(capacityValueFromMah(value * 1000, electricCapacityUnit).toFixed(UNIT_PRECISION.electricCapacity[electricCapacityUnit]));
     }
+    if (field === 'refSpd') {
+      return Number(speedValueFromMetersPerSecond(value, speedUnit).toFixed(UNIT_PRECISION.speed[speedUnit]));
+    }
     return value;
   };
 
@@ -228,6 +234,10 @@ export function CustomFramePanel() {
     }
     if (field === 'battCapacityAh') {
       updateField(field, toMahFromCapacityUnit(v, electricCapacityUnit) / 1000);
+      return;
+    }
+    if (field === 'refSpd') {
+      updateField(field, toMetersPerSecondFromSpeedUnit(v, speedUnit));
       return;
     }
     updateField(field, v);

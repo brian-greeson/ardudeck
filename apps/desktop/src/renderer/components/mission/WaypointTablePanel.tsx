@@ -39,11 +39,20 @@ import {
   distanceValueFromMeters,
   formatAltitudeFromMeters,
   formatDistanceFromMeters,
+  formatSpeedFromMetersPerSecond,
+  formatVerticalSpeedFromMetersPerSecond,
+  speedValueFromMetersPerSecond,
+  toMetersPerSecondFromSpeedUnit,
+  toMetersPerSecondFromVerticalSpeedUnit,
   toMetersFromAltitudeUnit,
   toMetersFromDistanceUnit,
   UNIT_LABELS,
+  UNIT_PRECISION,
+  verticalSpeedValueFromMetersPerSecond,
   type AltitudeUnit,
   type DistanceUnit,
+  type SpeedUnit,
+  type VerticalSpeedUnit,
 } from '../../../shared/user-units.js';
 
 // Helper to get GPS state without subscribing (avoids re-renders)
@@ -489,7 +498,14 @@ function CommandDropdown({
 // Get description for a waypoint
 // advanced=false: friendly labels for beginners ("Fly here", "Circle here")
 // advanced=true: standard GCS labels ("WP", "Loiter Unlim")
-function getWaypointSummary(wp: MissionItem, advanced: boolean, distanceUnit: DistanceUnit, altitudeUnit: AltitudeUnit): string {
+function getWaypointSummary(
+  wp: MissionItem,
+  advanced: boolean,
+  distanceUnit: DistanceUnit,
+  altitudeUnit: AltitudeUnit,
+  speedUnit: SpeedUnit,
+  verticalSpeedUnit: VerticalSpeedUnit,
+): string {
   const radiusSuffix = wp.param3 > 0 ? ` (${formatDistanceFromMeters(wp.param3, distanceUnit)} radius)` : '';
 
   switch (wp.command) {
@@ -546,7 +562,7 @@ function getWaypointSummary(wp: MissionItem, advanced: boolean, distanceUnit: Di
     case MAV_CMD.CONDITION_DELAY:
       return `Wait ${wp.param1}s`;
     case MAV_CMD.CONDITION_CHANGE_ALT:
-      return `Climb/descend at ${wp.param1} m/s`;
+      return `Climb/descend at ${formatVerticalSpeedFromMetersPerSecond(wp.param1, verticalSpeedUnit)}`;
     case MAV_CMD.CONDITION_DISTANCE:
       return `Wait until ${formatDistanceFromMeters(wp.param1, distanceUnit)} from next WP`;
     case MAV_CMD.CONDITION_YAW: {
@@ -607,7 +623,7 @@ function getWaypointSummary(wp: MissionItem, advanced: boolean, distanceUnit: Di
 
     // Actions
     case MAV_CMD.DO_CHANGE_SPEED:
-      return `Set speed to ${wp.param2} m/s`;
+      return `Set speed to ${formatSpeedFromMetersPerSecond(wp.param2, speedUnit)}`;
     case MAV_CMD.DO_SET_HOME:
       return wp.param1 === 1 ? 'Set home (current)' : 'Set home (location)';
     case MAV_CMD.DO_JUMP:
@@ -733,7 +749,7 @@ function getCommandParams(cmd: number): CommandParamConfig[] {
       ];
     case MAV_CMD.DO_CHANGE_SPEED:
       return [
-        { key: 'param2' as const, label: 'Target Speed', unit: 'm/s', min: 1, max: 50, step: 1, show: true },
+        { key: 'param2' as const, label: 'Target Speed', unit: 'm/s', unitKind: 'speed', min: 1, max: 50, step: 1, show: true },
       ];
     case MAV_CMD.NAV_LOITER_TO_ALT:
       return [
@@ -759,7 +775,7 @@ function getCommandParams(cmd: number): CommandParamConfig[] {
       ];
     case MAV_CMD.CONDITION_CHANGE_ALT:
       return [
-        { key: 'param1' as const, label: 'Rate', unit: 'm/s', min: 0, max: 10, step: 0.5, show: true },
+        { key: 'param1' as const, label: 'Rate', unit: 'm/s', unitKind: 'verticalSpeed', min: 0, max: 10, step: 0.5, show: true },
         { key: 'altitude' as const, label: 'Target Altitude', unit: 'm', unitKind: 'altitude', min: 0, max: 1000, step: 5, show: true },
       ];
     case MAV_CMD.CONDITION_DISTANCE:
@@ -838,7 +854,7 @@ function getCommandParams(cmd: number): CommandParamConfig[] {
     case MAV_CMD.NAV_ALTITUDE_WAIT:
       return [
         { key: 'altitude' as const, label: 'Target Altitude', unit: 'm', unitKind: 'altitude', min: 0, max: 1000, step: 5, show: true },
-        { key: 'param1' as const, label: 'Climb Rate', unit: 'm/s', min: 0, max: 10, step: 0.5, show: true },
+        { key: 'param1' as const, label: 'Climb Rate', unit: 'm/s', unitKind: 'verticalSpeed', min: 0, max: 10, step: 0.5, show: true },
       ];
     case MAV_CMD.NAV_SCRIPT_TIME:
       return [
@@ -996,26 +1012,73 @@ function formatBlockDuration(s: number): string {
   return mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
 }
 
-function displayParamValue(value: number, param: CommandParamConfig, distanceUnit: DistanceUnit, altitudeUnit: AltitudeUnit): number {
+function displayParamValue(
+  value: number,
+  param: CommandParamConfig,
+  distanceUnit: DistanceUnit,
+  altitudeUnit: AltitudeUnit,
+  speedUnit: SpeedUnit,
+  verticalSpeedUnit: VerticalSpeedUnit,
+): number {
   if (param.unitKind === 'distance') return distanceValueFromMeters(value, distanceUnit);
   if (param.unitKind === 'altitude') return altitudeValueFromMeters(value, altitudeUnit);
+  if (param.unitKind === 'speed') return Number(speedValueFromMetersPerSecond(value, speedUnit).toFixed(UNIT_PRECISION.speed[speedUnit]));
+  if (param.unitKind === 'verticalSpeed') return Number(verticalSpeedValueFromMetersPerSecond(value, verticalSpeedUnit).toFixed(UNIT_PRECISION.verticalSpeed[verticalSpeedUnit]));
   return value;
 }
 
-function nativeParamValue(value: number, param: CommandParamConfig, distanceUnit: DistanceUnit, altitudeUnit: AltitudeUnit): number {
+function nativeParamValue(
+  value: number,
+  param: CommandParamConfig,
+  distanceUnit: DistanceUnit,
+  altitudeUnit: AltitudeUnit,
+  speedUnit: SpeedUnit,
+  verticalSpeedUnit: VerticalSpeedUnit,
+): number {
   if (param.unitKind === 'distance') return toMetersFromDistanceUnit(value, distanceUnit);
   if (param.unitKind === 'altitude') return toMetersFromAltitudeUnit(value, altitudeUnit);
+  if (param.unitKind === 'speed') return toMetersPerSecondFromSpeedUnit(value, speedUnit);
+  if (param.unitKind === 'verticalSpeed') return toMetersPerSecondFromVerticalSpeedUnit(value, verticalSpeedUnit);
   return value;
 }
 
-function displayParamBound(value: number | undefined, param: CommandParamConfig, distanceUnit: DistanceUnit, altitudeUnit: AltitudeUnit): number | undefined {
+function displayParamBound(
+  value: number | undefined,
+  param: CommandParamConfig,
+  distanceUnit: DistanceUnit,
+  altitudeUnit: AltitudeUnit,
+  speedUnit: SpeedUnit,
+  verticalSpeedUnit: VerticalSpeedUnit,
+): number | undefined {
   if (value === undefined) return undefined;
-  return displayParamValue(value, param, distanceUnit, altitudeUnit);
+  return displayParamValue(value, param, distanceUnit, altitudeUnit, speedUnit, verticalSpeedUnit);
 }
 
-function displayParamUnit(param: CommandParamConfig, distanceUnit: DistanceUnit, altitudeUnit: AltitudeUnit): string {
+function displayParamStep(
+  value: number | undefined,
+  param: CommandParamConfig,
+  distanceUnit: DistanceUnit,
+  altitudeUnit: AltitudeUnit,
+  speedUnit: SpeedUnit,
+  verticalSpeedUnit: VerticalSpeedUnit,
+): number | undefined {
+  if (value === undefined) return undefined;
+  if (param.unitKind === 'speed') return 1 / (10 ** UNIT_PRECISION.speed[speedUnit]);
+  if (param.unitKind === 'verticalSpeed') return 1 / (10 ** UNIT_PRECISION.verticalSpeed[verticalSpeedUnit]);
+  return displayParamBound(value, param, distanceUnit, altitudeUnit, speedUnit, verticalSpeedUnit);
+}
+
+function displayParamUnit(
+  param: CommandParamConfig,
+  distanceUnit: DistanceUnit,
+  altitudeUnit: AltitudeUnit,
+  speedUnit: SpeedUnit,
+  verticalSpeedUnit: VerticalSpeedUnit,
+): string {
   if (param.unitKind === 'distance') return UNIT_LABELS.distance[distanceUnit];
   if (param.unitKind === 'altitude') return UNIT_LABELS.altitude[altitudeUnit];
+  if (param.unitKind === 'speed') return UNIT_LABELS.speed[speedUnit];
+  if (param.unitKind === 'verticalSpeed') return UNIT_LABELS.verticalSpeed[verticalSpeedUnit];
   return param.unit;
 }
 
@@ -1041,18 +1104,22 @@ function UnitParamInput({
   param,
   distanceUnit,
   altitudeUnit,
+  speedUnit,
+  verticalSpeedUnit,
   onCommit,
 }: {
   nativeValue: number;
   param: CommandParamConfig;
   distanceUnit: DistanceUnit;
   altitudeUnit: AltitudeUnit;
+  speedUnit: SpeedUnit;
+  verticalSpeedUnit: VerticalSpeedUnit;
   onCommit: (nativeValue: number) => void;
 }) {
-  const displayValue = displayParamValue(nativeValue, param, distanceUnit, altitudeUnit);
-  const min = displayParamBound(param.min, param, distanceUnit, altitudeUnit);
-  const max = displayParamBound(param.max, param, distanceUnit, altitudeUnit);
-  const step = displayParamBound(param.step, param, distanceUnit, altitudeUnit);
+  const displayValue = displayParamValue(nativeValue, param, distanceUnit, altitudeUnit, speedUnit, verticalSpeedUnit);
+  const min = displayParamBound(param.min, param, distanceUnit, altitudeUnit, speedUnit, verticalSpeedUnit);
+  const max = displayParamBound(param.max, param, distanceUnit, altitudeUnit, speedUnit, verticalSpeedUnit);
+  const step = displayParamStep(param.step, param, distanceUnit, altitudeUnit, speedUnit, verticalSpeedUnit);
   const [draft, setDraft] = useState(() => String(displayValue));
   const [focused, setFocused] = useState(false);
   const skipBlurCommitRef = useRef(false);
@@ -1063,16 +1130,16 @@ function UnitParamInput({
 
   const commitDisplayValue = useCallback((display: number) => {
     const clamped = clampNumber(display, min, max);
-    const nextNative = nativeParamValue(clamped, param, distanceUnit, altitudeUnit);
+    const nextNative = nativeParamValue(clamped, param, distanceUnit, altitudeUnit, speedUnit, verticalSpeedUnit);
     if (!sameNativeParamValue(nextNative, nativeValue)) {
       onCommit(nextNative);
     }
     setDraft(String(clamped));
-  }, [altitudeUnit, distanceUnit, max, min, nativeValue, onCommit, param]);
+  }, [altitudeUnit, distanceUnit, max, min, nativeValue, onCommit, param, speedUnit, verticalSpeedUnit]);
 
   const resetDraft = useCallback(() => {
-    setDraft(String(displayParamValue(nativeValue, param, distanceUnit, altitudeUnit)));
-  }, [altitudeUnit, distanceUnit, nativeValue, param]);
+    setDraft(String(displayParamValue(nativeValue, param, distanceUnit, altitudeUnit, speedUnit, verticalSpeedUnit)));
+  }, [altitudeUnit, distanceUnit, nativeValue, param, speedUnit, verticalSpeedUnit]);
 
   return (
     <input
@@ -1085,7 +1152,7 @@ function UnitParamInput({
         if (nextDraft.trim() === '') return;
         const parsed = Number(nextDraft);
         if (!isValidDisplayNumber(parsed, min, max)) return;
-        const nextNative = nativeParamValue(parsed, param, distanceUnit, altitudeUnit);
+        const nextNative = nativeParamValue(parsed, param, distanceUnit, altitudeUnit, speedUnit, verticalSpeedUnit);
         if (!sameNativeParamValue(nextNative, nativeValue)) {
           onCommit(nextNative);
         }
@@ -1098,6 +1165,10 @@ function UnitParamInput({
         }
         const parsed = Number(draft);
         if (draft.trim() === '' || !Number.isFinite(parsed)) {
+          resetDraft();
+          return;
+        }
+        if (parsed === displayValue) {
           resetDraft();
           return;
         }
@@ -1495,6 +1566,8 @@ function WaypointListContent({ readOnly = false }: { readOnly?: boolean }) {
   const settingsFirmware = useSettingsStore((s) => s.missionDefaults.missionFirmware);
   const distanceUnit = useSettingsStore((s) => s.unitPreferences.distance);
   const altitudeUnit = useSettingsStore((s) => s.unitPreferences.altitude);
+  const speedUnit = useSettingsStore((s) => s.unitPreferences.speed);
+  const verticalSpeedUnit = useSettingsStore((s) => s.unitPreferences.verticalSpeed);
   const connectionState = useConnectionStore((s) => s.connectionState);
 
   const showSegmentColors = useSettingsStore((s) => s.missionDefaults.showSegmentColors);
@@ -2128,7 +2201,7 @@ function WaypointListContent({ readOnly = false }: { readOnly?: boolean }) {
                     <div className={`flex items-center gap-1.5 ${
                       isChild ? 'text-xs text-content-secondary' : 'text-sm text-content'
                     }`}>
-                      <span className="truncate">{getWaypointSummary(wp, advancedLabels, distanceUnit, altitudeUnit)}</span>
+                      <span className="truncate">{getWaypointSummary(wp, advancedLabels, distanceUnit, altitudeUnit, speedUnit, verticalSpeedUnit)}</span>
                       {wp.command === MAV_CMD.CONDITION_YAW && wp.param3 !== 0 && (
                         <span className={`px-1 py-0 text-[9px] font-bold rounded shrink-0 ${
                           wp.param3 < 0
@@ -2208,18 +2281,20 @@ function WaypointListContent({ readOnly = false }: { readOnly?: boolean }) {
             {getCommandParams(selectedWaypoint.command)
               .filter(p => p.show)
               .map((param) => {
-                const displayUnit = displayParamUnit(param, distanceUnit, altitudeUnit);
+                const displayUnit = displayParamUnit(param, distanceUnit, altitudeUnit, speedUnit, verticalSpeedUnit);
                 return (
                   <div key={param.key}>
                     <label className="block text-[11px] text-content-secondary mb-1">
                       {param.label} {displayUnit && <span className="text-content-tertiary">({displayUnit})</span>}
                     </label>
-                    {param.unitKind === 'distance' || param.unitKind === 'altitude' ? (
+                    {param.unitKind === 'distance' || param.unitKind === 'altitude' || param.unitKind === 'speed' || param.unitKind === 'verticalSpeed' ? (
                       <UnitParamInput
                         nativeValue={selectedWaypoint[param.key] as number}
                         param={param}
                         distanceUnit={distanceUnit}
                         altitudeUnit={altitudeUnit}
+                        speedUnit={speedUnit}
+                        verticalSpeedUnit={verticalSpeedUnit}
                         onCommit={(nativeValue) => handleParamChange(selectedWaypoint.seq, param.key, nativeValue)}
                       />
                     ) : (

@@ -24,6 +24,7 @@ import {
   type DaylightWindow,
 } from '../../utils/flight-briefing';
 import { getCurrentWeather, compassPoint, type WeatherSummary } from '../../utils/weather-api';
+import { formatSpeedFromMetersPerSecond } from '../../../shared/user-units.js';
 
 // Each section is a subtle raised card so the groups read as distinct blocks
 // instead of one continuous list. Header (small icon + title) over a divider,
@@ -149,6 +150,7 @@ export function FlightInfoPanel() {
   const vehicles = useSettingsStore((s) => s.vehicles);
   const distanceUnit = useSettingsStore((s) => s.unitPreferences.distance);
   const altitudeUnit = useSettingsStore((s) => s.unitPreferences.altitude);
+  const speedUnit = useSettingsStore((s) => s.unitPreferences.speed);
 
   const { cruiseSpeedMs, enduranceSec, vehicleName, isAerial } = useMemo(() => {
     const st = useSettingsStore.getState();
@@ -248,7 +250,7 @@ export function FlightInfoPanel() {
         <Hero
           value={formatDurationSec(briefing.flightTimeSec)}
           unit="flight time"
-          sub={`at ~${cruiseSpeedMs.toFixed(1)} m/s cruise (${vehicleName})`}
+          sub={`at ~${formatSpeedFromMetersPerSecond(cruiseSpeedMs, speedUnit)} cruise (${vehicleName})`}
         />
         <Stat
           label="Batteries"

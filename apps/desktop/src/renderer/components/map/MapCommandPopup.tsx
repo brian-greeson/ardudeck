@@ -14,9 +14,14 @@ import {
   distanceValueFromMeters,
   formatAltitudeFromMeters,
   formatDistanceFromMeters,
+  speedValueFromMetersPerSecond,
+  toMetersPerSecondFromSpeedUnit,
+  toMetersPerSecondFromVerticalSpeedUnit,
   toMetersFromAltitudeUnit,
   toMetersFromDistanceUnit,
   UNIT_LABELS,
+  UNIT_PRECISION,
+  verticalSpeedValueFromMetersPerSecond,
 } from '../../../shared/user-units.js';
 
 interface MapCommandPopupProps {
@@ -132,6 +137,8 @@ export const MapCommandPopup: React.FC<MapCommandPopupProps> = ({
   const advancedCommandsUnlocked = useSettingsStore(s => s.advancedCommandsUnlocked);
   const distanceUnit = useSettingsStore(s => s.unitPreferences.distance);
   const altitudeUnit = useSettingsStore(s => s.unitPreferences.altitude);
+  const speedUnit = useSettingsStore(s => s.unitPreferences.speed);
+  const verticalSpeedUnit = useSettingsStore(s => s.unitPreferences.verticalSpeed);
   const scriptHealthy = scriptHealth.status === 'present';
 
   // Vehicle-class gating. When mavType is unknown (early connect / no link),
@@ -305,6 +312,40 @@ export const MapCommandPopup: React.FC<MapCommandPopupProps> = ({
     if (value === displayAltitude(climbRtlAlt)) return;
     setClimbRtlAlt(nativeAltitude(value));
   }, [climbRtlAlt, displayAltitude, nativeAltitude]);
+  const speedPrecision = UNIT_PRECISION.speed[speedUnit];
+  const speedStep = 1 / (10 ** speedPrecision);
+  const speedLabel = UNIT_LABELS.speed[speedUnit];
+  const displaySpeed = useCallback(
+    (mps: number) => Number(speedValueFromMetersPerSecond(mps, speedUnit).toFixed(speedPrecision)),
+    [speedPrecision, speedUnit],
+  );
+  const nativeSpeed = useCallback(
+    (value: number) => toMetersPerSecondFromSpeedUnit(value, speedUnit),
+    [speedUnit],
+  );
+  const setRevealSpeedFromDisplay = useCallback((value: number) => {
+    if (value === displaySpeed(revealSpeed)) return;
+    setRevealSpeed(nativeSpeed(value));
+  }, [displaySpeed, nativeSpeed, revealSpeed]);
+  const setStrafeSpeedFromDisplay = useCallback((value: number) => {
+    if (value === displaySpeed(strafeSpeed)) return;
+    setStrafeSpeed(nativeSpeed(value));
+  }, [displaySpeed, nativeSpeed, strafeSpeed]);
+  const verticalSpeedPrecision = UNIT_PRECISION.verticalSpeed[verticalSpeedUnit];
+  const verticalSpeedStep = 1 / (10 ** verticalSpeedPrecision);
+  const verticalSpeedLabel = UNIT_LABELS.verticalSpeed[verticalSpeedUnit];
+  const displayVerticalSpeed = useCallback(
+    (mps: number) => Number(verticalSpeedValueFromMetersPerSecond(mps, verticalSpeedUnit).toFixed(verticalSpeedPrecision)),
+    [verticalSpeedPrecision, verticalSpeedUnit],
+  );
+  const nativeVerticalSpeed = useCallback(
+    (value: number) => toMetersPerSecondFromVerticalSpeedUnit(value, verticalSpeedUnit),
+    [verticalSpeedUnit],
+  );
+  const setClimbRateFromDisplay = useCallback((value: number) => {
+    if (value === displayVerticalSpeed(climbRate)) return;
+    setClimbRate(nativeVerticalSpeed(value));
+  }, [climbRate, displayVerticalSpeed, nativeVerticalSpeed]);
 
   // Confirm button styling per tab
   const confirmClass =
@@ -429,8 +470,8 @@ export const MapCommandPopup: React.FC<MapCommandPopupProps> = ({
             <Suffix>{altitudeLabel} {spiralTargetAlt > currentAltAgl ? `↑ from ${formatAltitudeFromMeters(currentAltAgl, altitudeUnit)}` : `↓ from ${formatAltitudeFromMeters(currentAltAgl, altitudeUnit)}`}</Suffix>
           </Field>
           <Field label="Climb">
-            <NumberInput value={climbRate} onChange={setClimbRate} min={0.1} max={10} step={0.5} accent="violet" />
-            <Suffix>m/s</Suffix>
+            <NumberInput value={displayVerticalSpeed(climbRate)} onChange={setClimbRateFromDisplay} min={displayVerticalSpeed(0.1)} max={displayVerticalSpeed(10)} step={verticalSpeedStep} accent="violet" />
+            <Suffix>{verticalSpeedLabel}</Suffix>
           </Field>
         </>
       )}
@@ -458,8 +499,8 @@ export const MapCommandPopup: React.FC<MapCommandPopupProps> = ({
             <Suffix>{altitudeLabel} {revealClimb >= 0 ? '↑' : '↓'} during pullback</Suffix>
           </Field>
           <Field label="Speed">
-            <NumberInput value={revealSpeed} onChange={setRevealSpeed} min={0.5} max={15} step={0.5} accent="violet" />
-            <Suffix>m/s ({(revealPullback / Math.max(revealSpeed, 0.1)).toFixed(1)}s total)</Suffix>
+            <NumberInput value={displaySpeed(revealSpeed)} onChange={setRevealSpeedFromDisplay} min={displaySpeed(0.5)} max={displaySpeed(15)} step={speedStep} accent="violet" />
+            <Suffix>{speedLabel} ({(revealPullback / Math.max(revealSpeed, 0.1)).toFixed(1)}s total)</Suffix>
           </Field>
           <div className="mb-2 px-2 py-1 rounded text-[10px] text-violet-200 bg-violet-900/30 border border-violet-700/40">
             Vehicle pulls back from its current position. Camera (yaw) stays locked on this target throughout.
@@ -479,8 +520,8 @@ export const MapCommandPopup: React.FC<MapCommandPopupProps> = ({
             <Suffix>{distanceLabel} total dolly distance</Suffix>
           </Field>
           <Field label="Speed">
-            <NumberInput value={strafeSpeed} onChange={setStrafeSpeed} min={0.5} max={15} step={0.5} accent="violet" />
-            <Suffix>m/s ({(strafeLength / Math.max(strafeSpeed, 0.1)).toFixed(1)}s total)</Suffix>
+            <NumberInput value={displaySpeed(strafeSpeed)} onChange={setStrafeSpeedFromDisplay} min={displaySpeed(0.5)} max={displaySpeed(15)} step={speedStep} accent="violet" />
+            <Suffix>{speedLabel} ({(strafeLength / Math.max(strafeSpeed, 0.1)).toFixed(1)}s total)</Suffix>
           </Field>
           <div className="mb-2 px-2 py-1 rounded text-[10px] text-violet-200 bg-violet-900/30 border border-violet-700/40">
             Vehicle dollies past the target on the side it's already on. Camera locked on target.

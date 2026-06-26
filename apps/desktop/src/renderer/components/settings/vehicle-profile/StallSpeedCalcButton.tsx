@@ -1,6 +1,8 @@
 import { Calculator } from 'lucide-react';
 import type { VehicleProfile } from '../../../stores/settings-store.js';
+import { useSettingsStore } from '../../../stores/settings-store.js';
 import { Tooltip } from '../../ui/Tooltip.js';
+import { formatSpeedFromMetersPerSecond } from '../../../../shared/user-units.js';
 
 interface StallSpeedCalcButtonProps {
   vehicle: VehicleProfile;
@@ -38,6 +40,7 @@ export function StallSpeedCalcButton({ vehicle, onCompute }: StallSpeedCalcButto
 }
 
 function StallExplanation({ vehicle, estimate }: { vehicle: VehicleProfile; estimate: number }) {
+  const speedUnit = useSettingsStore((s) => s.unitPreferences.speed);
   const clMax = getClMax(vehicle);
   const weight_kg = (vehicle.weight ?? 0) / 1000;
   const wingArea_m2 = (vehicle.wingArea ?? 0) / 10000;
@@ -46,7 +49,7 @@ function StallExplanation({ vehicle, estimate }: { vehicle: VehicleProfile; esti
     <div className="w-[260px] text-left p-1 space-y-2">
       <div className="flex items-baseline justify-between gap-3 pb-1.5 border-b border-subtle">
         <span className="text-[11px] text-content-secondary">Estimated stall speed</span>
-        <span className="text-sm font-semibold text-content">{estimate.toFixed(1)} m/s</span>
+        <span className="text-sm font-semibold text-content">{formatSpeedFromMetersPerSecond(estimate, speedUnit)}</span>
       </div>
 
       <div className="text-[11px] text-content-secondary leading-snug">

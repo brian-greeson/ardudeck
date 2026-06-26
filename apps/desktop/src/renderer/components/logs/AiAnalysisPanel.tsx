@@ -5,7 +5,7 @@ import { useNavigationStore } from '../../stores/navigation-store';
 import { useConnectionStore } from '../../stores/connection-store';
 import { useParameterStore } from '../../stores/parameter-store';
 import { runClaudeLogChat } from './log-ai-tools';
-import { formatAltitudeFromMeters, formatCapacityFromMah } from '../../../shared/user-units.js';
+import { formatAltitudeFromMeters, formatCapacityFromMah, formatSpeedFromMetersPerSecond } from '../../../shared/user-units.js';
 
 /** AI disclaimer dialog shown before first AI interaction */
 export function AiWarningDialog({ onAccept, onCancel }: { onAccept: (dismiss: boolean) => void; onCancel: () => void }) {
@@ -289,6 +289,7 @@ export function AiAnalysisPanel() {
   const aiWarningDismissed = useSettingsStore((s) => s.aiWarningDismissed);
   const altitudeUnit = useSettingsStore((s) => s.unitPreferences.altitude);
   const electricCapacityUnit = useSettingsStore((s) => s.unitPreferences.electricCapacity);
+  const speedUnit = useSettingsStore((s) => s.unitPreferences.speed);
 
   const [input, setInput] = useState('');
   const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
@@ -394,7 +395,7 @@ You ONLY answer questions about this specific flight log, ArduPilot configuratio
 ## This Flight
 - Vehicle: ${meta.vehicleType || 'Unknown'} running ${meta.firmwareString || meta.firmwareVersion || 'Unknown firmware'}
 - Duration: ${(dS / 60).toFixed(1)} minutes (${dS.toFixed(1)} s)
-- Max Altitude: ${formatAltitudeFromMeters(stats.maxAlt, altitudeUnit)} | Max Speed: ${stats.maxSpd.toFixed(1)} m/s
+- Max Altitude: ${formatAltitudeFromMeters(stats.maxAlt, altitudeUnit)} | Max Speed: ${formatSpeedFromMetersPerSecond(stats.maxSpd, speedUnit)}
 - Distance: ${dist} | Battery Used: ${formatCapacityFromMah(stats.totalMah, electricCapacityUnit)}
 
 ## Health Check Results
@@ -423,7 +424,7 @@ If a parameter requires a reboot, mention it in your explanation text.${rebootPa
 - Reference ArduPilot parameters by name when suggesting changes.
 - Always use the :::param::: format when suggesting specific values.
 - If asked about data not in the log, say so.`;
-  }, [altitudeUnit, currentLog, electricCapacityUnit, healthResults, flightStats, aiProvider]);
+  }, [altitudeUnit, currentLog, electricCapacityUnit, healthResults, flightStats, aiProvider, speedUnit]);
 
   const sendToAi = useCallback(async () => {
     if (!aiProvider || !currentLog) return;
