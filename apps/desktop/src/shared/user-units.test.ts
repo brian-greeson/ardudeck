@@ -3,6 +3,8 @@ import {
   AREA_UNITS,
   DEFAULT_USER_UNIT_PREFERENCES,
   UNIT_LABELS,
+  areaInputValueFromSquareCentimeters,
+  areaInputValueFromSquareMeters,
   areaValueFromHectares,
   areaValueFromSquareCentimeters,
   areaValueFromSquareMeters,
@@ -240,6 +242,14 @@ describe('weight, dimension, area, and wind helpers', () => {
     expect(dimensionInputValueFromMillimeters(1200, 'm')).toBe('1.2');
     expect(dimensionInputValueFromMillimeters(254, 'in')).toBe('10');
     expect(dimensionInputValueFromMillimeters(304.8, 'ft')).toBe('1');
+  });
+
+  it('formats small editable area values without unit text or zero-rounding', () => {
+    expect(areaInputValueFromSquareCentimeters(undefined, 'm2')).toBe('');
+    expect(areaInputValueFromSquareCentimeters(2400, 'm2')).toBe('0.24');
+    expect(areaInputValueFromSquareCentimeters(2400, 'ft2')).toBe('2.58');
+    expect(areaInputValueFromSquareMeters(0.05, 'm2')).toBe('0.05');
+    expect(areaInputValueFromSquareMeters(0.05, 'ha')).toBe('0.000005');
   });
 });
 

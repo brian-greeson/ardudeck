@@ -23,6 +23,8 @@ import { getTemplate, defaultTemplateForType } from '../../lib/vehicle-templates
 import { Download } from 'lucide-react';
 import type { VehicleTemplate } from '../../lib/vehicle-templates/types';
 import {
+  AREA_INPUT_PRECISION,
+  areaInputValueFromSquareCentimeters,
   altitudeValueFromMeters,
   capacityValueFromMah,
   dimensionInputValueFromMillimeters,
@@ -37,9 +39,11 @@ import {
   toMetersPerSecondFromSpeedUnit,
   toMetersFromAltitudeUnit,
   toMillimetersFromDimensionUnit,
+  toSquareCentimetersFromAreaUnit,
   UNIT_LABELS,
   UNIT_PRECISION,
   weightInputValueFromGrams,
+  type AreaUnit,
   type AltitudeUnit,
   type DimensionUnit,
   type ElectricCapacityUnit,
@@ -47,7 +51,7 @@ import {
   type WeightUnit,
 } from '../../../shared/user-units.js';
 
-// Display unit conversion helpers - storage is always mm/g/mAh
+// Display unit conversion helpers - storage stays in each field's native unit.
 function fmtWeight(g: number, unit: WeightUnit): string {
   return formatWeightFromGrams(g, unit);
 }
@@ -1120,6 +1124,7 @@ export function SettingsView() {
   const speedUnit = unitPreferences.speed;
   const weightUnit = unitPreferences.weight;
   const dimensionUnit = unitPreferences.dimensions;
+  const areaUnit = unitPreferences.area;
 
   // Auto-detect vehicle type from MAVLink connection (only once per connection session)
   // Uses module-level variable to survive component remounts
@@ -2654,6 +2659,118 @@ function DimensionInputField({
   );
 }
 
+function areaInputStep(unit: AreaUnit): string {
+  return String(1 / (10 ** AREA_INPUT_PRECISION[unit]));
+}
+
+function clampAreaSquareCentimetersToRules(squareCentimeters: number, rules: FieldValidation): number {
+  let next = squareCentimeters;
+  if (rules.min !== undefined) next = Math.max(rules.min, next);
+  if (rules.max !== undefined) next = Math.min(rules.max, next);
+  return next;
+}
+
+function validateAreaSquareCentimetersField(value: string, rules: FieldValidation, unit: AreaUnit): string | null {
+  const trimmed = value.trim();
+  if (trimmed === '') {
+    return rules.required ? 'Required' : null;
+  }
+  const displayValue = Number(trimmed);
+  if (!Number.isFinite(displayValue)) return 'Must be a valid number';
+
+  const squareCentimeters = toSquareCentimetersFromAreaUnit(displayValue, unit);
+  if (rules.min !== undefined && squareCentimeters < rules.min) {
+    return `Min: ${areaInputValueFromSquareCentimeters(rules.min, unit)} ${UNIT_LABELS.area[unit]}`;
+  }
+  if (rules.max !== undefined && squareCentimeters > rules.max) {
+    return `Max: ${areaInputValueFromSquareCentimeters(rules.max, unit)} ${UNIT_LABELS.area[unit]}`;
+  }
+  return null;
+}
+
+function AreaInputField({
+  label,
+  valueSquareCentimeters,
+  onCommit,
+  unit,
+  placeholderSquareCentimeters,
+  rules,
+}: {
+  label: string;
+  valueSquareCentimeters: number | undefined;
+  onCommit: (squareCentimeters: number | undefined) => void;
+  unit: AreaUnit;
+  placeholderSquareCentimeters?: number;
+  rules: FieldValidation;
+}) {
+  const displayValue = areaInputValueFromSquareCentimeters(valueSquareCentimeters, unit);
+  const [draft, setDraft] = useState(displayValue);
+  const [focused, setFocused] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!focused) setDraft(displayValue);
+  }, [displayValue, focused]);
+
+  const resetDraft = useCallback(() => {
+    setDraft(areaInputValueFromSquareCentimeters(valueSquareCentimeters, unit));
+    setError(null);
+  }, [unit, valueSquareCentimeters]);
+
+  return (
+    <div>
+      <label className="block text-xs text-content-secondary mb-1">{label}</label>
+      <div className="relative">
+        <input
+          type="number"
+          value={draft}
+          onFocus={() => setFocused(true)}
+          onChange={(e) => {
+            const next = e.target.value;
+            setDraft(next);
+            setError(validateAreaSquareCentimetersField(next, rules, unit));
+          }}
+          onBlur={() => {
+            setFocused(false);
+            const err = validateAreaSquareCentimetersField(draft, rules, unit);
+            if (draft.trim() === '' && !rules.required) {
+              if (valueSquareCentimeters !== undefined) onCommit(undefined);
+              resetDraft();
+              return;
+            }
+            if (draft.trim() === '' || err) {
+              resetDraft();
+              return;
+            }
+            const displayNumber = Number(draft);
+            if (!Number.isFinite(displayNumber)) {
+              resetDraft();
+              return;
+            }
+            if (displayNumber === Number(displayValue)) {
+              resetDraft();
+              return;
+            }
+            const squareCentimeters = Math.round(toSquareCentimetersFromAreaUnit(displayNumber, unit));
+            onCommit(clampAreaSquareCentimetersToRules(squareCentimeters, rules));
+          }}
+          placeholder={placeholderSquareCentimeters !== undefined ? areaInputValueFromSquareCentimeters(placeholderSquareCentimeters, unit) : undefined}
+          min={rules.min !== undefined ? areaInputValueFromSquareCentimeters(rules.min, unit) : undefined}
+          max={rules.max !== undefined ? areaInputValueFromSquareCentimeters(rules.max, unit) : undefined}
+          step={areaInputStep(unit)}
+          className={`w-full px-3 py-2 pr-12 bg-surface-input border rounded-lg text-content text-sm focus:outline-none ${
+            error ? 'border-red-500/60 focus:border-red-500' : 'border-border focus:border-blue-500'
+          }`}
+        />
+        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-content-secondary text-xs pointer-events-none">
+          {UNIT_LABELS.area[unit]}
+        </span>
+      </div>
+      {error && <div className="text-[10px] text-red-400 mt-0.5">{error}</div>}
+    </div>
+  );
+}
+
 function VehicleInputField({
   label,
   value,
@@ -3211,6 +3328,7 @@ function VehicleEditModal({
   const speedUnit = unitPreferences.speed;
   const weightUnit = unitPreferences.weight;
   const dimensionUnit = unitPreferences.dimensions;
+  const areaUnit = unitPreferences.area;
 
   const isCopter = vehicle.type === 'copter';
   const isPlane = vehicle.type === 'plane';
@@ -3355,14 +3473,13 @@ function VehicleEditModal({
                   placeholderGrams={1500}
                   rules={VEHICLE_FIELD_RULES.weight!}
                 />
-                <VehicleInputField
+                <AreaInputField
                   label="Wing Area"
-                  value={getDisplayValue('wingArea')}
-                  onChange={(v) => handleChange('wingArea', v)}
-                  onBlur={() => handleBlur('wingArea')}
-                  error={getError('wingArea')}
-                  unit="cm²"
-                  placeholder="2400"
+                  valueSquareCentimeters={vehicle.wingArea}
+                  onCommit={(squareCentimeters) => onUpdate({ wingArea: squareCentimeters })}
+                  unit={areaUnit}
+                  placeholderSquareCentimeters={2400}
+                  rules={VEHICLE_FIELD_RULES.wingArea!}
                 />
                 <div>
                   <div className="flex items-center justify-between mb-1 min-h-[18px]">

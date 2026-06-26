@@ -16,6 +16,7 @@ import {
 import { useArduPilotSitlStore } from '../../stores/ardupilot-sitl-store';
 import { useSettingsStore } from '../../stores/settings-store';
 import {
+  areaInputValueFromSquareMeters,
   altitudeValueFromMeters,
   capacityValueFromMah,
   dimensionInputValueFromMillimeters,
@@ -25,6 +26,7 @@ import {
   toMetersPerSecondFromSpeedUnit,
   toMetersFromAltitudeUnit,
   toMillimetersFromDimensionUnit,
+  toSquareMetersFromAreaUnit,
   UNIT_LABELS,
   UNIT_PRECISION,
   weightInputValueFromGrams,
@@ -51,7 +53,6 @@ const FIELD_HINTS: Partial<Record<keyof SitlCustomFrame, string>> = {
   refTempC: '°C',
   refRotRate: 'deg/s',
   hoverThrOut: '0–1',
-  disc_area: 'm² (total prop)',
   num_motors: '4 / 6 / 8',
 };
 
@@ -73,6 +74,7 @@ export function CustomFramePanel() {
   const speedUnit = unitPreferences.speed;
   const weightUnit = unitPreferences.weight;
   const dimensionUnit = unitPreferences.dimensions;
+  const areaUnit = unitPreferences.area;
 
   const [expanded, setExpanded] = useState(false);
   const [list, setList] = useState<SitlCustomFrameMeta[]>([]);
@@ -209,6 +211,7 @@ export function CustomFramePanel() {
   const getFieldHint = (field: keyof SitlCustomFrame): string | undefined => {
     if (field === 'mass') return UNIT_LABELS.weight[weightUnit];
     if (field === 'diagonal_size') return `${UNIT_LABELS.dimensions[dimensionUnit]} (motor-to-motor)`;
+    if (field === 'disc_area') return `${UNIT_LABELS.area[areaUnit]} (total prop)`;
     if (field === 'refAlt') return UNIT_LABELS.altitude[altitudeUnit];
     if (field === 'battCapacityAh') return UNIT_LABELS.electricCapacity[electricCapacityUnit];
     if (field === 'refSpd') return UNIT_LABELS.speed[speedUnit];
@@ -227,6 +230,9 @@ export function CustomFramePanel() {
     }
     if (field === 'diagonal_size') {
       return Number(dimensionInputValueFromMillimeters(value * 1000, dimensionUnit));
+    }
+    if (field === 'disc_area') {
+      return Number(areaInputValueFromSquareMeters(value, areaUnit));
     }
     if (field === 'battCapacityAh') {
       return Number(capacityValueFromMah(value * 1000, electricCapacityUnit).toFixed(UNIT_PRECISION.electricCapacity[electricCapacityUnit]));
@@ -250,6 +256,10 @@ export function CustomFramePanel() {
     }
     if (field === 'diagonal_size') {
       updateField(field, toMillimetersFromDimensionUnit(v, dimensionUnit) / 1000);
+      return;
+    }
+    if (field === 'disc_area') {
+      updateField(field, toSquareMetersFromAreaUnit(v, areaUnit));
       return;
     }
     if (field === 'battCapacityAh') {

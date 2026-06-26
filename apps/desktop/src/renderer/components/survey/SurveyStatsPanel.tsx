@@ -3,7 +3,7 @@
  */
 import type { SurveyStats } from './survey-types';
 import { useSettingsStore } from '../../stores/settings-store';
-import { formatDistanceFromMeters } from '../../../shared/user-units.js';
+import { formatAreaFromSquareMeters, formatDistanceFromMeters } from '../../../shared/user-units.js';
 
 interface SurveyStatsPanelProps {
   stats: SurveyStats;
@@ -25,11 +25,6 @@ function formatTime(seconds: number): string {
   return `${mins}m ${secs}s`;
 }
 
-function formatArea(sqMeters: number): string {
-  if (sqMeters >= 10000) return `${(sqMeters / 10000).toFixed(2)} ha`;
-  return `${Math.round(sqMeters)} m\u00B2`;
-}
-
 function formatDataSize(gb: number): string {
   if (gb >= 1) return `${gb.toFixed(1)} GB`;
   return `${Math.round(gb * 1024)} MB`;
@@ -37,6 +32,7 @@ function formatDataSize(gb: number): string {
 
 export function SurveyStatsPanel({ stats, batteries, dataSizeGb }: SurveyStatsPanelProps) {
   const distanceUnit = useSettingsStore((s) => s.unitPreferences.distance);
+  const areaUnit = useSettingsStore((s) => s.unitPreferences.area);
 
   // Hide stats only when there's nothing to show. Manual/ground-vehicle mode
   // has photoCount=0 but real lineCount/distance/area — still useful.
@@ -53,7 +49,7 @@ export function SurveyStatsPanel({ stats, batteries, dataSizeGb }: SurveyStatsPa
       <StatItem label="Lines" value={stats.lineCount.toString()} />
       <StatItem label="Distance" value={formatDistanceFromMeters(stats.flightDistance, distanceUnit)} />
       <StatItem label="Time" value={formatTime(stats.flightTime)} />
-      <StatItem label="Area" value={formatArea(stats.areaCovered)} />
+      <StatItem label="Area" value={formatAreaFromSquareMeters(stats.areaCovered, areaUnit)} />
       {batteries !== undefined && batteries > 0 && (
         <StatItem label="Batteries" value={batteries.toString()} />
       )}

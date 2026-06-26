@@ -157,6 +157,13 @@ export const UNIT_PRECISION = {
   },
 } as const;
 
+export const AREA_INPUT_PRECISION: Record<AreaUnit, number> = {
+  m2: 2,
+  ha: 6,
+  ft2: 2,
+  ac: 6,
+};
+
 const METERS_PER_FOOT = 0.3048;
 const METERS_PER_MILE = 1609.344;
 const GRAMS_PER_OUNCE = 28.349523125;
@@ -521,6 +528,16 @@ export function formatAreaFromHectares(hectares: number, unit: AreaUnit): string
 
 export function formatAreaFromSquareCentimeters(squareCentimeters: number, unit: AreaUnit): string {
   return `${formatValue(areaValueFromSquareCentimeters(squareCentimeters, unit), UNIT_PRECISION.area[unit])} ${UNIT_LABELS.area[unit]}`;
+}
+
+export function areaInputValueFromSquareMeters(squareMeters: number | undefined, unit: AreaUnit): string {
+  if (squareMeters === undefined || !Number.isFinite(squareMeters)) return '';
+  return String(Number(areaValueFromSquareMeters(squareMeters, unit).toFixed(AREA_INPUT_PRECISION[unit])));
+}
+
+export function areaInputValueFromSquareCentimeters(squareCentimeters: number | undefined, unit: AreaUnit): string {
+  if (squareCentimeters === undefined || !Number.isFinite(squareCentimeters)) return '';
+  return areaInputValueFromSquareMeters(squareCentimeters / SQUARE_CENTIMETERS_PER_SQUARE_METER, unit);
 }
 
 export function windSpeedValueFromMetersPerSecond(metersPerSecond: number, unit: WindSpeedUnit): number {
